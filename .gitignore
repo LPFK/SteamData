@@ -1,0 +1,25 @@
+# secrets — if you commit .env, start over from scratch
+.env
+*.db
+*.sqlite3
+
+# data
+data/raw/
+data/*.parquet
+
+# env
+.venv/
+__pycache__/
+*.pyc
+
+# jupyter
+.ipynb_checkpoints/
+
+# outputs
+outputs/
+
+.DS_Store
+Thumbs.db
+
+#Automation 
+CLAUDE.md
