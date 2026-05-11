@@ -6,8 +6,8 @@ DATA_DIR  = Path(__file__).resolve().parents[1] / "data"
 RAW_DIR   = DATA_DIR / "raw"
 
 # expected filenames once downloaded from Kaggle
-FILE_GAMES   = "games.csv"          # dataset A fronkongames
-FILE_REVIEWS = "reviews.csv"        # dataset B mohamedtarek01234
+FILE_GAMES   = "games.csv"          # dataset A — fronkongames
+FILE_REVIEWS = "reviews.csv"        # dataset B — mohamedtarek01234
 
 
 def _parse_owners(value: str) -> tuple[int, int]:
@@ -57,10 +57,13 @@ def load_reviews() -> pd.DataFrame:
 def clean_games(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
 
-    # normalise the app_id column name dataset uses AppID with capital letters
-    df.columns = [c.strip() for c in df.columns]
-    if "AppID" in df.columns:
-        df = df.rename(columns={"AppID": "app_id"})
+    # normalise all column names at once — strip whitespace, lowercase, spaces to underscores
+    # this handles the full fronkongames schema: "Release date", "Peak CCU", "DLC count", etc.
+    df.columns = [c.strip().lower().replace(" ", "_") for c in df.columns]
+
+    # app_id specifically used "AppID" before normalisation, now it's "appid" — rename to app_id
+    if "appid" in df.columns:
+        df = df.rename(columns={"appid": "app_id"})
 
     df["app_id"] = df["app_id"].astype(str)
 
@@ -80,7 +83,7 @@ def clean_games(df: pd.DataFrame) -> pd.DataFrame:
         lambda r: _price_tier(r["price"], r["is_free"]), axis=1
     )
 
-    # owners range
+    # owners range — column is now "estimated_owners" after normalisation
     owners = df["estimated_owners"].apply(_parse_owners)
     df["estimated_owners_min"] = owners.apply(lambda x: x[0])
     df["estimated_owners_max"] = owners.apply(lambda x: x[1])
@@ -95,7 +98,7 @@ def clean_games(df: pd.DataFrame) -> pd.DataFrame:
                         .apply(lambda x: str(x).split(",")[0].strip())
     )
 
-    # drop columns we don't need for analysis
+    # drop columns we don't need — all names are now normalised
     drop_cols = [
         "detailed_description", "short_description", "about_the_game",
         "reviews", "header_image", "website", "support_url", "support_email",
@@ -203,7 +206,7 @@ def seed_db(session: Session) -> None:
     session.commit()
     print(f"[seed] {len(game_rows):,} games inserted")
 
-    # reviews are large insert in chunks to avoid memory issues
+    # reviews are large — insert in chunks to avoid memory issues
     chunk_size = 10_000
     review_chunks = [
         reviews.iloc[i : i + chunk_size]
