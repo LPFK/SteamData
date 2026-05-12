@@ -6,7 +6,7 @@ DATA_DIR = Path(__file__).resolve().parents[1] / "data"
 RAW_DIR  = DATA_DIR / "raw"
 
 FILE_GAMES   = "games.csv"
-FILE_REVIEWS = "reviews.csv"
+FILE_REVIEWS = "steam_game_reviews.csv"
 
 
 def _parse_owners(value: str) -> tuple[int, int]:
@@ -62,7 +62,7 @@ def load_reviews() -> pd.DataFrame:
     path = RAW_DIR / FILE_REVIEWS
     if not path.exists():
         raise FileNotFoundError(f"Missing: {path}. Download dataset B from Kaggle.")
-    df = pd.read_csv(path, encoding="utf-8")
+    df = pd.read_csv(path, encoding="utf-8", low_memory=False)
     print(f"[load] reviews  | {len(df):>7,} rows | {df.shape[1]} cols")
     return df
 
@@ -120,12 +120,20 @@ def clean_reviews(df: pd.DataFrame) -> pd.DataFrame:
 
     df.columns = [c.strip().lower().replace(" ", "_") for c in df.columns]
 
-    if "app_id" in df.columns:
-        df["app_id"] = df["app_id"].astype(str)
-
     before = len(df)
-    df = df.dropna(subset=["review_score"])
-    print(f"[clean] reviews | {before - len(df):,} rows without score dropped")
+    df = df.dropna(subset=["recommendation"])
+    print(f"[clean] reviews | {before - len(df):,} rows without recommendation dropped")
+
+    # convert text recommendation to numeric score matching the SteamReview model convention
+    df["review_score"] = df["recommendation"].map({"Recommended": 2, "Not Recommended": 1})
+
+    # normalise join key for case-insensitive matching against games.name
+    df["name_key"] = df["game_name"].str.strip().str.lower()
+
+    # helpful votes may be strings like "1,152" — coerce to int
+    df["helpful"] = pd.to_numeric(
+        df["helpful"].astype(str).str.replace(",", "", regex=False), errors="coerce"
+    ).fillna(0).astype(int)
 
     return df
 
@@ -134,11 +142,14 @@ def build_master() -> tuple[pd.DataFrame, pd.DataFrame]:
     games   = clean_games(load_games())
     reviews = clean_reviews(load_reviews())
 
-    game_meta = games[["app_id", "price", "price_tier", "primary_genre",
+    game_meta = games[["app_id", "name", "price", "price_tier", "primary_genre",
                         "is_indie", "release_year", "review_ratio",
-                        "total_reviews", "primary_developer"]]
+                        "total_reviews", "primary_developer"]].copy()
+    game_meta["name_key"] = game_meta["name"].str.strip().str.lower()
+    # keep one row per name — the entry with the most reviews is most likely the canonical release
+    game_meta = game_meta.sort_values("total_reviews", ascending=False).drop_duplicates("name_key")
 
-    reviews_enriched = reviews.merge(game_meta, on="app_id", how="left")
+    reviews_enriched = reviews.merge(game_meta, on="name_key", how="left")
 
     print(f"[merge] reviews enriched | {len(reviews_enriched):,} rows | "
           f"{reviews_enriched['app_id'].nunique()} unique games")
@@ -216,10 +227,10 @@ def seed_db(session: Session) -> None:
         review_rows = [
             SteamReview(
                 app_id       = str(getattr(row, "app_id", "")),
-                app_name     = getattr(row, "app_name", None),
+                app_name     = getattr(row, "game_name", None),
                 review_score = getattr(row, "review_score", None),
-                review_votes = getattr(row, "review_votes", None),
-                review_text  = getattr(row, "review_text", None),
+                review_votes = getattr(row, "helpful", None),
+                review_text  = getattr(row, "review", None),
             )
             for row in chunk.itertuples()
         ]
