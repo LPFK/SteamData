@@ -2,16 +2,14 @@ from pathlib import Path
 import pandas as pd
 from sqlalchemy.orm import Session
 
-DATA_DIR  = Path(__file__).resolve().parents[1] / "data"
-RAW_DIR   = DATA_DIR / "raw"
+DATA_DIR = Path(__file__).resolve().parents[1] / "data"
+RAW_DIR  = DATA_DIR / "raw"
 
-# expected filenames once downloaded from Kaggle
-FILE_GAMES   = "games.csv"          # dataset A — fronkongames
-FILE_REVIEWS = "reviews.csv"        # dataset B — mohamedtarek01234
+FILE_GAMES   = "games.csv"
+FILE_REVIEWS = "reviews.csv"
 
 
 def _parse_owners(value: str) -> tuple[int, int]:
-    # estimated_owners comes as a string range like "20000 - 50000"
     try:
         parts = str(value).replace(",", "").split(" - ")
         return int(parts[0]), int(parts[1])
@@ -30,12 +28,13 @@ def _price_tier(price: float, is_free: bool) -> str:
 
 
 def _primary_genre(genres: str) -> str:
-    # genres is stored as a comma-separated string like "Action,Indie,RPG"
     if pd.isna(genres) or genres == "":
         return "unknown"
     return str(genres).split(",")[0].strip()
 
 
+# The raw CSV header merges "Discount" and "DLC count" into one token, shifting every
+# subsequent column by one. Supplying the correct 40 names fixes the mapping.
 _GAMES_COLUMNS = [
     "AppID", "Name", "Release date", "Estimated owners", "Peak CCU",
     "Required age", "Price", "Discount", "DLC count", "About the game",
@@ -49,12 +48,11 @@ _GAMES_COLUMNS = [
     "Screenshots", "Movies",
 ]
 
+
 def load_games() -> pd.DataFrame:
     path = RAW_DIR / FILE_GAMES
     if not path.exists():
         raise FileNotFoundError(f"Missing: {path}. Download dataset A from Kaggle.")
-    # The CSV header merges "Discount" and "DLC count" as one entry, causing a 1-column
-    # shift from col 7 onward. Supply the correct 40 column names to fix the mapping.
     df = pd.read_csv(path, encoding="utf-8", skiprows=1, names=_GAMES_COLUMNS)
     print(f"[load] games    | {len(df):>7,} rows | {df.shape[1]} cols")
     return df
@@ -72,48 +70,38 @@ def load_reviews() -> pd.DataFrame:
 def clean_games(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
 
-    # normalise all column names at once — strip whitespace, lowercase, spaces to underscores
-    # this handles the full fronkongames schema: "Release date", "Peak CCU", "DLC count", etc.
     df.columns = [c.strip().lower().replace(" ", "_") for c in df.columns]
 
-    # app_id specifically used "AppID" before normalisation, now it's "appid" — rename to app_id
     if "appid" in df.columns:
         df = df.rename(columns={"appid": "app_id"})
 
     df["app_id"] = df["app_id"].astype(str)
 
-    # extract year from release_date string (format varies: "Oct 5, 2017" or "2017-10-05")
     df["release_year"] = pd.to_datetime(
         df["release_date"], errors="coerce"
     ).dt.year.astype("Int64")
 
-    # review ratio — guard against division by zero
     total = df["positive"] + df["negative"]
     df["total_reviews"] = total
     df["review_ratio"] = (df["positive"] / total.where(total > 0)).round(4)
 
-    # price tier
     df["is_free"] = df["price"].fillna(0) == 0
     df["price_tier"] = df.apply(
         lambda r: _price_tier(r["price"], r["is_free"]), axis=1
     )
 
-    # owners range — column is now "estimated_owners" after normalisation
     owners = df["estimated_owners"].apply(_parse_owners)
     df["estimated_owners_min"] = owners.apply(lambda x: x[0])
     df["estimated_owners_max"] = owners.apply(lambda x: x[1])
 
-    # genre helpers
     df["primary_genre"] = df["genres"].apply(_primary_genre)
     df["is_indie"] = df["genres"].fillna("").str.contains("Indie", case=False)
 
-    # primary developer (first in the list if multiple)
     df["primary_developer"] = (
         df["developers"].fillna("unknown")
                         .apply(lambda x: str(x).split(",")[0].strip())
     )
 
-    # drop columns we don't need — all names are now normalised
     drop_cols = [
         "detailed_description", "short_description", "about_the_game",
         "reviews", "header_image", "website", "support_url", "support_email",
@@ -130,14 +118,11 @@ def clean_games(df: pd.DataFrame) -> pd.DataFrame:
 def clean_reviews(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
 
-    # normalise column names
     df.columns = [c.strip().lower().replace(" ", "_") for c in df.columns]
 
-    # make sure app_id is a string for joining
     if "app_id" in df.columns:
         df["app_id"] = df["app_id"].astype(str)
 
-    # drop rows with no review score
     before = len(df)
     df = df.dropna(subset=["review_score"])
     print(f"[clean] reviews | {before - len(df):,} rows without score dropped")
@@ -146,11 +131,9 @@ def clean_reviews(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def build_master() -> tuple[pd.DataFrame, pd.DataFrame]:
-    # returns two DataFrames: games (full 122k) and reviews (290-game subset joined with game metadata)
     games   = clean_games(load_games())
     reviews = clean_reviews(load_reviews())
 
-    # enrich reviews with game metadata for the 290-game analysis
     game_meta = games[["app_id", "price", "price_tier", "primary_genre",
                         "is_indie", "release_year", "review_ratio",
                         "total_reviews", "primary_developer"]]
@@ -221,7 +204,7 @@ def seed_db(session: Session) -> None:
     session.commit()
     print(f"[seed] {len(game_rows):,} games inserted")
 
-    # reviews are large — insert in chunks to avoid memory issues
+    # reviews are large — chunked to avoid memory pressure during bulk insert
     chunk_size = 10_000
     review_chunks = [
         reviews.iloc[i : i + chunk_size]

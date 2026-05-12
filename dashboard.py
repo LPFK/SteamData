@@ -4,29 +4,29 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 import streamlit as st
+from matplotlib.lines import Line2D
 
-
-DATA_DIR = Path(__file__).resolve().parent / "data"
-GAMES_PARQUET = DATA_DIR / "games.parquet"
+DATA_DIR        = Path(__file__).resolve().parent / "data"
+GAMES_PARQUET   = DATA_DIR / "games.parquet"
 REVIEWS_PARQUET = DATA_DIR / "reviews_enriched.parquet"
 
-PRIMARY   = "#2C3E50"
-SECONDARY = "#7F8C8D"
-ALERT     = "#E74C3C"
-INDIE_COLOR   = "#2980B9"
+PRIMARY         = "#2C3E50"
+SECONDARY       = "#7F8C8D"
+ALERT           = "#E74C3C"
+INDIE_COLOR     = "#2980B9"
 NON_INDIE_COLOR = "#E74C3C"
 
-PRICE_TIER_ORDER = ["free", "budget", "mid", "premium"]
-PRICE_TIER_LABELS = {"free": "Free", "budget": "Budget (<$5)", "mid": "Mid ($5-20)", "premium": "Premium (>$20)"}
+PRICE_TIER_ORDER  = ["free", "budget", "mid", "premium"]
+PRICE_TIER_LABELS = {
+    "free":    "Free",
+    "budget":  "Budget (<$5)",
+    "mid":     "Mid ($5-20)",
+    "premium": "Premium (>$20)",
+}
 
 MIN_REVIEWS = 10
 
-st.set_page_config(
-    page_title="Steam Data Story",
-    page_icon=None,
-    layout="wide",
-)
-
+st.set_page_config(page_title="Steam Data Story", page_icon=None, layout="wide")
 
 
 @st.cache_data
@@ -34,14 +34,8 @@ def load_games() -> pd.DataFrame:
     df = pd.read_parquet(GAMES_PARQUET)
     df = df[df["total_reviews"] >= MIN_REVIEWS].copy()
     df["indie_label"] = df["is_indie"].map({True: "Indie", False: "Non-indie"})
-    df["price_tier"] = pd.Categorical(df["price_tier"], categories=PRICE_TIER_ORDER, ordered=True)
+    df["price_tier"]  = pd.Categorical(df["price_tier"], categories=PRICE_TIER_ORDER, ordered=True)
     return df
-
-
-@st.cache_data
-def load_reviews() -> pd.DataFrame:
-    return pd.read_parquet(REVIEWS_PARQUET)
-
 
 
 def apply_style(ax, title: str, xlabel: str = "", ylabel: str = "") -> None:
@@ -54,7 +48,6 @@ def apply_style(ax, title: str, xlabel: str = "", ylabel: str = "") -> None:
     ax.set_facecolor("#FDFEFE")
 
 
-
 if not GAMES_PARQUET.exists():
     st.error(
         "games.parquet not found. Run the pipeline first:\n\n"
@@ -65,7 +58,7 @@ if not GAMES_PARQUET.exists():
 
 games = load_games()
 
-st.title("Steam games — data story")
+st.title("Steam games as a data story")
 st.caption(
     f"Dataset A | {len(games):,} games with at least {MIN_REVIEWS} reviews | "
     "review_ratio = positive / (positive + negative)"
@@ -73,37 +66,30 @@ st.caption(
 
 st.divider()
 
-
-
 col1, col2, col3, col4 = st.columns(4)
 
-indie_mean   = games.loc[games["is_indie"], "review_ratio"].mean()
+indie_mean   = games.loc[games["is_indie"],  "review_ratio"].mean()
 nonind_mean  = games.loc[~games["is_indie"], "review_ratio"].mean()
-free_mean    = games.loc[games["price_tier"] == "free", "review_ratio"].mean()
+free_mean    = games.loc[games["price_tier"] == "free",    "review_ratio"].mean()
 premium_mean = games.loc[games["price_tier"] == "premium", "review_ratio"].mean()
 
-col1.metric("Games analysed", f"{len(games):,}")
-col2.metric("Indie avg score", f"{indie_mean:.1%}", f"{indie_mean - nonind_mean:+.1%} vs non-indie")
-col3.metric("Free games avg score", f"{free_mean:.1%}")
+col1.metric("Games analysed",        f"{len(games):,}")
+col2.metric("Indie avg score",       f"{indie_mean:.1%}", f"{indie_mean - nonind_mean:+.1%} vs non-indie")
+col3.metric("Free games avg score",    f"{free_mean:.1%}")
 col4.metric("Premium games avg score", f"{premium_mean:.1%}")
 
 st.divider()
-
-
 
 st.subheader("Review score distribution")
 st.caption("Most games cluster near the extremes — the 'bimodal' pattern typical of Steam.")
 
 fig, ax = plt.subplots(figsize=(9, 3.5))
-ax.hist(
-    games["review_ratio"].dropna(),
-    bins=60,
-    color=PRIMARY,
-    edgecolor="white",
-    linewidth=0.4,
-)
+ax.hist(games["review_ratio"].dropna(), bins=60, color=PRIMARY, edgecolor="white", linewidth=0.4)
 apply_style(ax, "Distribution of review ratio (all games, >= 10 reviews)", "Review ratio", "Number of games")
-ax.axvline(games["review_ratio"].median(), color=ALERT, linewidth=1.5, linestyle="--", label=f"Median {games['review_ratio'].median():.2f}")
+ax.axvline(
+    games["review_ratio"].median(), color=ALERT, linewidth=1.5, linestyle="--",
+    label=f"Median {games['review_ratio'].median():.2f}",
+)
 ax.legend(fontsize=9)
 fig.tight_layout()
 st.pyplot(fig)
@@ -111,13 +97,10 @@ plt.close(fig)
 
 st.divider()
 
-
-
-st.subheader("Q1 — Do indie games score better than non-indie, at the same price?")
+st.subheader("Do indie games score better than non-indie, at the same price?")
 st.caption("Box plots per price tier. Filters: >= 10 reviews. H1 predicts indie > non-indie at every tier.")
 
 fig, axes = plt.subplots(1, 4, figsize=(14, 4.5), sharey=True)
-
 palette = {"Indie": INDIE_COLOR, "Non-indie": NON_INDIE_COLOR}
 
 for i, tier in enumerate(PRICE_TIER_ORDER):
@@ -127,17 +110,11 @@ for i, tier in enumerate(PRICE_TIER_ORDER):
         ax.set_visible(False)
         continue
     sns.boxplot(
-        data=subset,
-        x="indie_label",
-        y="review_ratio",
-        palette=palette,
-        width=0.5,
-        linewidth=0.8,
-        fliersize=2,
-        ax=ax,
+        data=subset, x="indie_label", y="review_ratio",
+        palette=palette, width=0.5, linewidth=0.8, fliersize=2, ax=ax,
     )
-    n_indie    = subset["is_indie"].sum()
-    n_nonindic = (~subset["is_indie"]).sum()
+    n_indie   = subset["is_indie"].sum()
+    n_nonindi = (~subset["is_indie"]).sum()
     ax.set_title(PRICE_TIER_LABELS[tier], fontsize=11, fontweight="bold", color=PRIMARY)
     ax.set_xlabel("")
     ax.set_ylabel("Review ratio" if i == 0 else "")
@@ -145,8 +122,8 @@ for i, tier in enumerate(PRICE_TIER_ORDER):
     ax.set_facecolor("#FDFEFE")
     for spine in ax.spines.values():
         spine.set_edgecolor("#D5D8DC")
-    ax.text(0, -0.12, f"n={n_indie:,}", ha="center", fontsize=7, color=INDIE_COLOR, transform=ax.get_xaxis_transform())
-    ax.text(1, -0.12, f"n={n_nonindic:,}", ha="center", fontsize=7, color=NON_INDIE_COLOR, transform=ax.get_xaxis_transform())
+    ax.text(0, -0.12, f"n={n_indie:,}",  ha="center", fontsize=7, color=INDIE_COLOR,     transform=ax.get_xaxis_transform())
+    ax.text(1, -0.12, f"n={n_nonindi:,}", ha="center", fontsize=7, color=NON_INDIE_COLOR, transform=ax.get_xaxis_transform())
 
 fig.suptitle("Review ratio by price tier — indie vs non-indie", fontsize=13, fontweight="bold", color=PRIMARY, y=1.01)
 fig.tight_layout()
@@ -155,8 +132,7 @@ plt.close(fig)
 
 st.divider()
 
-
-st.subheader("Q2 — Does higher price predict a better (or worse) review score?")
+st.subheader("Does higher price predict a better (or worse) review score?")
 st.caption("Bar chart: median review ratio per price tier. H2 tests whether free games are punished for aggressive monetization.")
 
 tier_stats = (
@@ -178,10 +154,7 @@ for bar, (_, row) in zip(bars, tier_stats.iterrows()):
         bar.get_x() + bar.get_width() / 2,
         bar.get_height() + 0.005,
         f"{row['median']:.2f}\nn={int(row['count']):,}",
-        ha="center",
-        va="bottom",
-        fontsize=8,
-        color=PRIMARY,
+        ha="center", va="bottom", fontsize=8, color=PRIMARY,
     )
 apply_style(ax, "Median review ratio by price tier", "Price tier", "Median review ratio")
 ax.set_ylim(0, 1)
@@ -192,9 +165,7 @@ plt.close(fig)
 
 st.divider()
 
-
-
-st.subheader("Q3 — Has Steam become saturated? Do newer games score lower?")
+st.subheader("Has Steam become saturated? Do newer games score lower?")
 st.caption("Median review ratio by release year, indie vs non-indie. H5 predicts a drop post-2015 as supply exploded.")
 
 year_data = (
@@ -208,8 +179,8 @@ year_data = year_data[year_data["release_year"].between(2005, 2024)]
 fig, ax = plt.subplots(figsize=(11, 4))
 for label, color in [("Indie", INDIE_COLOR), ("Non-indie", NON_INDIE_COLOR)]:
     subset = year_data[year_data["indie_label"] == label]
-    ax.plot(subset["release_year"], subset["review_ratio"], marker="o", markersize=4,
-            color=color, linewidth=1.8, label=label)
+    ax.plot(subset["release_year"], subset["review_ratio"],
+            marker="o", markersize=4, color=color, linewidth=1.8, label=label)
 
 apply_style(ax, "Median review ratio by release year", "Release year", "Median review ratio")
 ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f"{y:.0%}"))
@@ -221,9 +192,7 @@ plt.close(fig)
 
 st.divider()
 
-
-
-st.subheader("H4 — Do players who spend more time also review better?")
+st.subheader("Do players who spend more time also review better?")
 st.caption(
     "Scatter of average playtime (log scale) vs review ratio. "
     "Capped at 2000h to remove extreme outliers. H4 predicts a positive correlation."
@@ -236,22 +205,17 @@ playtime_data = (
 )
 
 fig, ax = plt.subplots(figsize=(9, 4.5))
-scatter = ax.scatter(
+ax.scatter(
     playtime_data["average_playtime_forever"].clip(upper=120_000) / 60,
     playtime_data["review_ratio"],
     c=playtime_data["is_indie"].map({True: INDIE_COLOR, False: NON_INDIE_COLOR}),
-    alpha=0.25,
-    s=12,
-    linewidths=0,
+    alpha=0.25, s=12, linewidths=0,
 )
 ax.set_xscale("log")
-# legend proxies
-from matplotlib.lines import Line2D
-legend_elements = [
-    Line2D([0], [0], marker="o", color="w", markerfacecolor=INDIE_COLOR, markersize=7, label="Indie"),
+ax.legend(handles=[
+    Line2D([0], [0], marker="o", color="w", markerfacecolor=INDIE_COLOR,     markersize=7, label="Indie"),
     Line2D([0], [0], marker="o", color="w", markerfacecolor=NON_INDIE_COLOR, markersize=7, label="Non-indie"),
-]
-ax.legend(handles=legend_elements, fontsize=9)
+], fontsize=9)
 apply_style(ax, "Average playtime vs review ratio (log scale, sample of 8k games)",
             "Average playtime (hours, log scale)", "Review ratio")
 ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f"{y:.0%}"))
@@ -261,9 +225,7 @@ plt.close(fig)
 
 st.divider()
 
-
-
-st.subheader("Bonus — Which genres score the highest on average?")
+st.subheader("Which genres score the highest on average?")
 st.caption("Top 15 genres by median review ratio (min 50 games per genre).")
 
 genre_stats = (

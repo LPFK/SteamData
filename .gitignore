@@ -12,6 +12,9 @@ data/*.parquet
 __pycache__/
 *.pyc
 
+# local claude settings
+.claude/settings.local.json
+
 # jupyter
 .ipynb_checkpoints/
 
