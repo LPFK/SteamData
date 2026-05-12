@@ -36,11 +36,26 @@ def _primary_genre(genres: str) -> str:
     return str(genres).split(",")[0].strip()
 
 
+_GAMES_COLUMNS = [
+    "AppID", "Name", "Release date", "Estimated owners", "Peak CCU",
+    "Required age", "Price", "Discount", "DLC count", "About the game",
+    "Supported languages", "Full audio languages", "Reviews", "Header image",
+    "Website", "Support url", "Support email", "Windows", "Mac", "Linux",
+    "Metacritic score", "Metacritic url", "User score", "Positive", "Negative",
+    "Score rank", "Achievements", "Recommendations", "Notes",
+    "Average playtime forever", "Average playtime two weeks",
+    "Median playtime forever", "Median playtime two weeks",
+    "Developers", "Publishers", "Categories", "Genres", "Tags",
+    "Screenshots", "Movies",
+]
+
 def load_games() -> pd.DataFrame:
     path = RAW_DIR / FILE_GAMES
     if not path.exists():
         raise FileNotFoundError(f"Missing: {path}. Download dataset A from Kaggle.")
-    df = pd.read_csv(path, encoding="utf-8")
+    # The CSV header merges "Discount" and "DLC count" as one entry, causing a 1-column
+    # shift from col 7 onward. Supply the correct 40 column names to fix the mapping.
+    df = pd.read_csv(path, encoding="utf-8", skiprows=1, names=_GAMES_COLUMNS)
     print(f"[load] games    | {len(df):>7,} rows | {df.shape[1]} cols")
     return df
 
@@ -75,7 +90,7 @@ def clean_games(df: pd.DataFrame) -> pd.DataFrame:
     # review ratio — guard against division by zero
     total = df["positive"] + df["negative"]
     df["total_reviews"] = total
-    df["review_ratio"] = (df["positive"] / total.replace(0, pd.NA)).round(4)
+    df["review_ratio"] = (df["positive"] / total.where(total > 0)).round(4)
 
     # price tier
     df["is_free"] = df["price"].fillna(0) == 0
