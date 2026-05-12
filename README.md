@@ -1,6 +1,6 @@
 # datastory-steam
 
-School project — Formation Python Semaine 2 (May 2026).
+Formation projet Semaine 2 (May 2026).
 
 **Central question:** Does price, genre, or studio size predict a game's review score on Steam, and do indie games outperform AAA titles?
 
