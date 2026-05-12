@@ -22,6 +22,7 @@ class User(Base):
     password_hash   = Column(String(128), nullable=False) # stored hashed via bcrypt
     role            = Column(String(16), default="viewer", nullable=False)
     created_at      = Column(DateTime, default=datetime.utcnow)
+    last_login_at   = Column(DateTime, nullable=True)
 
     def __repr__(self) -> str:
         return f"<User id={self.id} username={self.username} role={self.role}>"
