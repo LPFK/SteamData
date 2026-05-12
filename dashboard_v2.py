@@ -166,7 +166,7 @@ for bucket, color in BUCKET_COLORS.items():
 ax.axhline(REF_LINE, color=SECONDARY, linewidth=1, linestyle="--", alpha=0.6,
            label=f"{REF_LINE:.0%} reference")
 
-apply_style(ax, "Price vs review ratio — trend by era", "Price (EUR)", "Review ratio")
+apply_style(ax, "Price vs review ratio, trend by era", "Price (EUR)", "Review ratio")
 ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f"{y:.0%}"))
 ax.set_xlim(0, PRICE_CAP)
 ax.set_ylim(0, 1.05)
@@ -177,7 +177,7 @@ plt.close(fig)
 
 interpretation(
     "The trend lines are flat to slightly negative across all three eras. "
-    "Recent high-priced releases (2020-2024) show the weakest relationship between price and score — "
+    "Recent high-priced releases (2020-2024) show the weakest relationship between price and score. "
     "players are not rewarding ambition, they are punishing unmet expectations."
 )
 
@@ -185,7 +185,7 @@ interpretation(
 
 section(
     "The AAA disappointment curve",
-    "For non-indie games, the premium tier scores lower than mid — the opposite of what marketing suggests.",
+    "For non-indie games, the premium tier scores lower than mid, the opposite of what marketing suggests.",
 )
 
 ch3 = games.copy()
@@ -212,14 +212,14 @@ for ax, label in zip(axes, ["Non-indie", "Indie"]):
         spine.set_edgecolor("#D5D8DC")
     ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f"{y:.0%}"))
 
-fig.suptitle("Review ratio by price tier — indie vs non-indie", fontsize=12, fontweight="bold",
+fig.suptitle("Review ratio by price tier, indie vs non-indie", fontsize=12, fontweight="bold",
              color=PRIMARY, y=1.01)
 fig.tight_layout()
 st.pyplot(fig)
 plt.close(fig)
 
 interpretation(
-    "The non-indie premium box sits visibly lower than the mid box — the disappointment is real and measurable. "
+    "The non-indie premium box sits visibly lower than the mid box, the disappointment is real and measurable. "
     "Indie games show a different pattern: their premium tier holds up, likely because the audience self-selects "
     "and expectations are set more honestly."
 )
@@ -267,7 +267,7 @@ top_new_mid = (
     games[
         (games["price"] > 20) & (games["price"] <= 40) &
         (games["total_reviews"] >= 50) &
-        (games["release_year"] >= 2015)
+        (games["release_year"] >= 2021)
     ]
     .sort_values("review_ratio", ascending=False)
     .head(20)
@@ -299,7 +299,7 @@ for bar, (_, row) in zip(bars, top_new_mid.iterrows()):
         )
 
 ax.axvline(REF_LINE, color=SECONDARY, linewidth=1, linestyle="--", alpha=0.5)
-apply_style(ax, "Top 20 games priced 20-40 EUR (min 50 reviews, from 2015)",
+apply_style(ax, "Top 20 games priced 20-40 EUR (min 50 reviews, from 2021)",
             "Review ratio", "")
 ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"{x:.0%}"))
 ax.set_xlim(0, 1.12)
@@ -308,7 +308,7 @@ st.pyplot(fig)
 plt.close(fig)
 
 interpretation(
-    "The gap between the new mid and premium lines widens after 2018 and is largest in 2022-2024 — "
+    "The gap between the new mid and premium lines widens after 2018 and is largest in 2022-2024. "
     "exactly when the 70 EUR standard was being pushed. The top-reviewed games in this band "
     "demonstrate that the price point itself is not the cause: quality and honest positioning are."
 )
@@ -317,11 +317,13 @@ interpretation(
 
 section(
     "The verdict: what actually earns a good review",
-    "The clearest predictor is the combination of indie status and the 5-20 EUR sweet spot.",
+    "The clearest predictor is the combination of indie status and the 5-20 EUR sweet spot. Games with fewer than 250 reviews are excluded.",
 )
 
+verdict_games = games[games["total_reviews"] >= 250]
+
 pivot = (
-    games.groupby(["price_tier", "indie_label"])["review_ratio"]
+    verdict_games.groupby(["price_tier", "indie_label"])["review_ratio"]
     .mean()
     .unstack("indie_label")
     .reindex(TIER_ORDER)
@@ -379,6 +381,6 @@ col3.metric(
 
 interpretation(
     "Indie mid-priced games consistently outperform non-indie premium games by a meaningful margin. "
-    "The data does not reward scale — it rewards games that deliver what they promise at a price "
+    "The data does not reward scale, it rewards games that deliver what they promise at a price "
     "that does not set the player up for disappointment."
 )
