@@ -135,6 +135,10 @@ def clean_reviews(df: pd.DataFrame) -> pd.DataFrame:
         df["helpful"].astype(str).str.replace(",", "", regex=False), errors="coerce"
     ).fillna(0).astype(int)
 
+    df["funny"] = pd.to_numeric(
+        df["funny"].astype(str).str.replace(",", "", regex=False), errors="coerce"
+    ).fillna(0).astype(int)
+
     return df
 
 
