@@ -452,10 +452,11 @@ elif page == "Database":
     if st.session_state.reseed_confirm:
         st.error("Are you sure? This operation runs the full pipeline and commits to the DB.")
         if st.button("Confirm reseed"):
-            import subprocess
-            result = subprocess.run(
-                [sys.executable, "-m", "app.data_processing"],
-                capture_output=True, text=True, cwd=os.path.dirname(db_path),
-            )
-            st.code(result.stdout + result.stderr)
+            import io, contextlib
+            from app.data_processing import seed_db
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                with get_session() as session:
+                    seed_db(session)
+            st.code(buf.getvalue())
             st.session_state.reseed_confirm = False
