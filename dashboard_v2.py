@@ -129,6 +129,8 @@ for label, color in [("Indie", BLUE), ("Non-indie", ALERT)]:
 
 apply_style(ax, "Median game price by release year", "Release year", "Median price (EUR)")
 ax.legend(fontsize=9)
+ax.set_ylim(bottom=0)
+ax.yaxis.set_major_locator(plt.MultipleLocator(10))
 ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f"{y:.0f}"))
 fig.tight_layout()
 st.pyplot(fig)
@@ -266,8 +268,8 @@ st.markdown("**Top-reviewed games in the 20-40 EUR band**")
 top_new_mid = (
     games[
         (games["price"] > 20) & (games["price"] <= 40) &
-        (games["total_reviews"] >= 50) &
-        (games["release_year"] >= 2021)
+        (games["total_reviews"] >= 500) &
+        (games["release_year"] >= 2015)
     ]
     .sort_values("review_ratio", ascending=False)
     .head(20)
@@ -276,15 +278,35 @@ top_new_mid = (
 
 ANNOTATE = {"Cyberpunk 2077", "Hades II"}
 
-norm = plt.Normalize(top_new_mid["release_year"].min(), top_new_mid["release_year"].max())
-cmap = plt.colormaps["Blues"]
+bar_colors = [BLUE if indie else ALERT for indie in top_new_mid["is_indie"]]
 
 fig, ax = plt.subplots(figsize=(9, 6))
+def _clean_name(s: str) -> str:
+    import unicodedata
+    s = (s
+         .replace("®", "")
+         .replace("©", "")
+         .replace("™", "")
+         .replace("–", "-")
+         .replace("—", "-")
+         .replace("…", "...")
+    )
+    normalized = unicodedata.normalize("NFKD", s)
+    ascii_name = normalized.encode("ascii", errors="ignore").decode("ascii")
+    return " ".join(ascii_name.split())[:50]
+
 bars = ax.barh(
-    top_new_mid["name"].str[:45],
+    top_new_mid["name"].apply(_clean_name),
     top_new_mid["review_ratio"],
-    color=[cmap(norm(y)) for y in top_new_mid["release_year"]],
+    color=bar_colors,
     edgecolor="white",
+)
+
+from matplotlib.patches import Patch
+ax.legend(
+    handles=[Patch(color=BLUE, label="Indie"), Patch(color=ALERT, label="Non-indie")],
+    fontsize=9,
+    loc="lower right",
 )
 for bar, (_, row) in zip(bars, top_new_mid.iterrows()):
     label = f"{row['review_ratio']:.2f}  {row['release_year']:.0f}  {row['price']:.0f} EUR"
@@ -299,7 +321,7 @@ for bar, (_, row) in zip(bars, top_new_mid.iterrows()):
         )
 
 ax.axvline(REF_LINE, color=SECONDARY, linewidth=1, linestyle="--", alpha=0.5)
-apply_style(ax, "Top 20 games priced 20-40 EUR (min 50 reviews, from 2021)",
+apply_style(ax, "Top 20 games priced 20-40 EUR (min 500 reviews, from 2015)",
             "Review ratio", "")
 ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"{x:.0%}"))
 ax.set_xlim(0, 1.12)

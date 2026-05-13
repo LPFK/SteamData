@@ -53,6 +53,8 @@ def test_jwt_invalid_token_returns_none():
 
 def test_jwt_tampered_token_returns_none():
     token = create_token(user_id=1, role="viewer")
-    # flip the last character to tamper with the signature
-    tampered = token[:-1] + ("A" if token[-1] != "A" else "B")
+    # flip a character 10 positions from the end — the last char shares padding bits
+    # with 'A' and 'B' (both decode to the same bytes), so use a safer position
+    pos = -10
+    tampered = token[:pos] + ("A" if token[pos] != "A" else "B") + token[pos + 1:]
     assert verify_token(tampered) is None
